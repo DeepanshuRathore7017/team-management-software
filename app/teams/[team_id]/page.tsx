@@ -1,9 +1,15 @@
-// TeamDetail.tsx — /teams/[team_id]
 // Accessible by Admin and Team Members of that team
+import postgres from "postgres";
+
+if (!process.env.POSTGRES_URL) {
+  throw new Error("POSTGRES_URL is not defined");
+}
+
+const sql = postgres(process.env.POSTGRES_URL, { ssl: "require" });
 
 type MemberRole = "team_lead" | "team_member";
 type ProjectStatus = "active" | "overdue" | "pending" | "completed" | "none";
-type TaskStatus    = "todo" | "in_progress" | "done";
+type TaskStatus    = "active" | "overdue" | "pending" | "completed" | "none";
 
 interface Member {
   id: string;
@@ -32,7 +38,6 @@ interface TaskSummary {
 interface TeamDetail {
   id: string;
   name: string;
-  createdAt: string;
   lead: Member;
   members: Member[];
   project: string;
@@ -44,45 +49,15 @@ interface TeamDetail {
   taskCounts: { open: number; done: number; overdue: number };
 }
 
-const MOCK_TEAM: TeamDetail = {
-  id: "team-alpha",
-  name: "Team Alpha",
-  createdAt: "Jan 5, 2025",
-  lead: {
-    id: "e1",
-    name: "Rahul Verma",
-    initial: "R",
-    color: "bg-violet-500",
-    role: "team_lead",
-    designation: "Senior Backend Engineer",
-    email: "rahul@ethara.ai",
-    joinedTeam: "Jan 5, 2025",
-    tasksAssigned: 4,
-    tasksDone: 3,
-  },
-  members: [
-    { id: "e2", name: "Sneha Kulkarni", initial: "S", color: "bg-cyan-500",    role: "team_member", designation: "Frontend Developer",  email: "sneha@ethara.ai",  joinedTeam: "Jan 8, 2025",  tasksAssigned: 3, tasksDone: 2 },
-    { id: "e3", name: "Vikram Das",     initial: "V", color: "bg-emerald-500", role: "team_member", designation: "Backend Developer",   email: "vikram@ethara.ai", joinedTeam: "Jan 8, 2025",  tasksAssigned: 4, tasksDone: 3 },
-    { id: "e4", name: "Kavya Menon",    initial: "K", color: "bg-amber-500",   role: "team_member", designation: "QA Engineer",        email: "kavya@ethara.ai",  joinedTeam: "Jan 10, 2025", tasksAssigned: 2, tasksDone: 2 },
-    { id: "e5", name: "Arjun Patel",    initial: "A", color: "bg-rose-500",    role: "team_member", designation: "DevOps Engineer",    email: "arjun@ethara.ai",  joinedTeam: "Jan 12, 2025", tasksAssigned: 2, tasksDone: 1 },
-    { id: "e6", name: "Nisha Reddy",    initial: "N", color: "bg-blue-500",    role: "team_member", designation: "UI Designer",        email: "nisha@ethara.ai",  joinedTeam: "Jan 15, 2025", tasksAssigned: 3, tasksDone: 1 },
-    { id: "e7", name: "Pranav Shah",    initial: "P", color: "bg-teal-500",    role: "team_member", designation: "Full-Stack Dev",     email: "pranav@ethara.ai", joinedTeam: "Feb 1, 2025",  tasksAssigned: 2, tasksDone: 2 },
-    { id: "e8", name: "Jaya Iyer",      initial: "J", color: "bg-pink-500",    role: "team_member", designation: "QA Analyst",        email: "jaya@ethara.ai",   joinedTeam: "Feb 5, 2025",  tasksAssigned: 1, tasksDone: 1 },
-  ],
-  project: "Ethara Platform v2",
-  projectId: "1",
-  projectStatus: "active",
-  projectDeadline: "Jun 30, 2025",
-  projectProgress: 62,
-  taskCounts: { open: 6, done: 9, overdue: 1 },
-  recentTasks: [
-    { id: "t1", name: "Design auth flow",       assignee: "Sneha K.", assigneeInitial: "S", assigneeColor: "bg-cyan-500",    deadline: "Feb 10", status: "done",        isOverdue: false },
-    { id: "t2", name: "Build REST API",          assignee: "Vikram D.",assigneeInitial: "V", assigneeColor: "bg-emerald-500", deadline: "Jun 18", status: "in_progress", isOverdue: false },
-    { id: "t3", name: "Integrate payment gateway",assignee:"Arjun P.", assigneeInitial: "A", assigneeColor: "bg-rose-500",   deadline: "May 1",  status: "in_progress", isOverdue: true  },
-    { id: "t4", name: "Write unit tests",        assignee: "Jaya I.",  assigneeInitial: "J", assigneeColor: "bg-pink-500",   deadline: "Jun 25", status: "todo",        isOverdue: false },
-    { id: "t5", name: "CI/CD pipeline",          assignee: "Kavya M.", assigneeInitial: "K", assigneeColor: "bg-amber-500",  deadline: "Jun 10", status: "done",        isOverdue: false },
-  ],
-};
+const avatarColors = [
+    "bg-blue-500",
+    "bg-emerald-500",
+    "bg-rose-500",
+    "bg-violet-500",
+    "bg-cyan-500",
+    "bg-amber-500",
+    "bg-pink-500",
+  ];
 
 const PROJECT_STATUS_CFG: Record<ProjectStatus, { label: string; pill: string; bar: string }> = {
   active:    { label: "Active",     pill: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30", bar: "from-blue-500 to-blue-400" },
@@ -93,9 +68,11 @@ const PROJECT_STATUS_CFG: Record<ProjectStatus, { label: string; pill: string; b
 };
 
 const TASK_STATUS_CFG: Record<TaskStatus, { label: string; pill: string; dot: string }> = {
-  done:        { label: "Done",        pill: "bg-emerald-500/20 text-emerald-300", dot: "bg-emerald-400" },
-  in_progress: { label: "In Progress", pill: "bg-blue-500/20 text-blue-300",       dot: "bg-blue-400" },
-  todo:        { label: "To Do",       pill: "bg-slate-700/60 text-slate-400",     dot: "bg-slate-500" },
+  completed:        { label: "Completed",        pill: "bg-emerald-500/20 text-emerald-300", dot: "bg-emerald-400" },
+  active: { label: "Active", pill: "bg-blue-500/20 text-blue-300",       dot: "bg-blue-400" },
+  pending:        { label: "Pending",       pill: "bg-slate-700/60 text-slate-400",     dot: "bg-slate-500" },
+  overdue:        { label: "Overdue",       pill: "bg-red-500/20 text-red-400",     dot: "bg-slate-500" },
+  none:        { label: "Unassigned",       pill: "bg-amber-500/15 text-amber-400",     dot: "bg-slate-500" },
 };
 
 // ─── Member Row ───────────────────────────────────────────────────────────────
@@ -153,11 +130,170 @@ function MemberRow({ member, isAdmin }: { member: Member; isAdmin: boolean }) {
 
 // ─── Page export ──────────────────────────────────────────────────────────────
 
-export default function TeamDetail() {
-  const team    = MOCK_TEAM;
+export default async function TeamDetail({
+  params,
+}: {
+  params: Promise<{ team_id: string }>;
+}) {
+  const { team_id } = await params;
+  // team
+  const [team] = await sql`
+    SELECT *
+    FROM teams
+    WHERE id = ${team_id}
+    LIMIT 1
+  `;
+
+  if (!team) {
+    throw new Error("Team not found");
+  }
+
+  // members
+  const memberRows = await sql`
+    SELECT *
+    FROM employees
+    WHERE team_id = ${team_id}
+  `;
+
+  
+  const members: Member[] = [];
+
+  for (const [index, m] of memberRows.entries()) {
+    const assignedRows = await sql`
+      SELECT COUNT(*)
+      FROM tasks
+      WHERE assigned_emp_email = ${m.email}
+    `;
+
+    const doneRows = await sql`
+      SELECT COUNT(*)
+      FROM tasks
+      WHERE assigned_emp_email = ${m.email}
+      AND status = 'completed'
+    `;
+
+    members.push({
+      id: m.id,
+      name: m.name,
+      initial: m.name
+        .split(" ")
+        .map((w: string) => w[0])
+        .join("")
+        .toUpperCase(),
+
+      color: avatarColors[index % avatarColors.length],
+      role: m.role,
+      designation: m.position || "Developer",
+      email: m.email,
+      joinedTeam: m.joined_team?.toLocaleDateString() || "",
+      tasksAssigned: Number(assignedRows[0].count),
+      tasksDone: Number(doneRows[0].count),
+    });
+  }
+
+  // lead
+  const lead = members.find((m) => m.role === "team_lead") || members[0];
+
+  // project
+  const [project] = await sql`SELECT * FROM projects WHERE team_id = ${team_id} LIMIT 1`;
+
+  // recent tasks
+  const recentTaskRows = project
+    ? await sql`
+        SELECT *
+        FROM tasks
+        WHERE project_id = ${project.id}
+        ORDER BY date_of_creation DESC
+        LIMIT 5
+      `
+    : [];
+
+  const recentTasks: TaskSummary[] =
+    recentTaskRows.map(
+      (task: any, index: number) => {
+        const assigneeInitial = task.assigned_emp_email
+          ?.split(" ")
+          .map((w: string) => w[0])
+          .join("")
+          .toUpperCase();
+
+        const isOverdue =
+          task.status !== "completed" &&
+          new Date(task.deadline) < new Date();
+
+        return {
+          id: task.id,
+          name: task.name,
+          assignee: task.assigned_emp_email,
+          assigneeInitial,
+          assigneeColor: avatarColors[index % avatarColors.length],
+          deadline: task.deadline?.toLocaleDateString() || "",
+          status: isOverdue ? "overdue" : task.status,
+          isOverdue,
+        };
+      }
+    );
+
+  // counts
+  const [{ open }] = project
+    ? await sql`
+        SELECT COUNT(*) AS open
+        FROM tasks
+        WHERE project_id = ${project.id}
+        AND status != 'completed'
+      `
+    : [{ open: 0 }];
+
+  const [{ done }] = project
+    ? await sql`
+        SELECT COUNT(*) AS done
+        FROM tasks
+        WHERE project_id = ${project.id}
+        AND status = 'completed'
+      `
+    : [{ done: 0 }];
+
+  const [{ overdue }] = project
+    ? await sql`
+        SELECT COUNT(*) AS overdue
+        FROM tasks
+        WHERE project_id = ${project.id}
+        AND deadline < NOW()
+        AND status != 'completed'
+      `
+    : [{ overdue: 0 }];
+
+  let projectStatus =(project?.status as ProjectStatus) || "pending";
+
+  if (
+    projectStatus !== "completed" &&
+    project &&
+    new Date(project.deadline) < new Date()
+  ) {
+    projectStatus = "overdue";
+  }
+
+  const teamDetail: TeamDetail = {
+    id: team.id,
+    name: team.name,
+    lead,
+    members,
+    project: project?.name || "No Project",
+    projectId: project?.id || "",
+    projectStatus,
+    projectDeadline: project?.deadline?.toLocaleDateString() || "",
+    projectProgress: Number(project?.progress || 0),
+    recentTasks,
+    taskCounts: {
+      open: Number(open),
+      done: Number(done),
+      overdue: Number(overdue),
+    },
+  };
+
   const isAdmin = true; // replace with sessionStorage role check
-  const pCfg    = PROJECT_STATUS_CFG[team.projectStatus];
-  const allMembers = [team.lead, ...team.members];
+  const pCfg    = PROJECT_STATUS_CFG[teamDetail.projectStatus];
+  const allMembers = [teamDetail.lead, ...teamDetail.members];
 
   return (
     <div className="min-h-screen bg-[#0b0f1a] text-white">
@@ -168,16 +304,17 @@ export default function TeamDetail() {
         <div className="mb-5 flex items-center gap-1.5 text-[12px] text-slate-500">
           <a href="/teams" className="text-blue-400 hover:text-blue-300">Teams</a>
           <span>›</span>
-          <span className="text-slate-400">{team.name}</span>
+          <span className="text-slate-400">{teamDetail.name}</span>
         </div>
 
         {/* Hero */}
         <div className="mb-5 rounded-2xl border border-white/[0.07] bg-white/[0.03] p-6">
           <div className="mb-5 flex items-start justify-between gap-4">
             <div>
-              <h1 className="text-[22px] font-bold text-white">{team.name}</h1>
+              <h1 className="text-[22px] font-bold text-white">{teamDetail.name}</h1>
               <p className="mt-1 text-[13px] text-slate-500">
-                Created {team.createdAt} · {allMembers.length} members
+                {/*   to be edited later */}
+                {teamDetail.members.length}  members
               </p>
             </div>
             {isAdmin && (
@@ -194,24 +331,24 @@ export default function TeamDetail() {
 
           {/* Team lead highlight */}
           <div className="mb-5 flex items-center gap-3.5 rounded-xl border border-blue-500/20 bg-blue-500/[0.06] px-4 py-3">
-            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[15px] font-bold text-white ${team.lead.color}`}>
-              {team.lead.initial}
+            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[15px] font-bold text-white ${teamDetail.lead.color}`}>
+              {teamDetail.lead.initial}
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
-                <p className="text-[14px] font-semibold text-white">{team.lead.name}</p>
+                <p className="text-[14px] font-semibold text-white">{teamDetail.lead.name}</p>
                 <span className="rounded-full bg-blue-500/25 px-2.5 py-0.5 text-[10px] font-semibold text-blue-300">TEAM LEAD</span>
               </div>
-              <p className="text-[12px] text-slate-500">{team.lead.designation} · {team.lead.email}</p>
+              <p className="text-[12px] text-slate-500">{teamDetail.lead.designation} · {teamDetail.lead.email}</p>
             </div>
           </div>
 
           {/* Stat row */}
           <div className="grid grid-cols-3 gap-3">
             {[
-              { label: "Open Tasks",  value: team.taskCounts.open,    cls: "border-blue-500/20 bg-blue-500/[0.07] text-blue-300" },
-              { label: "Completed",   value: team.taskCounts.done,    cls: "border-emerald-500/20 bg-emerald-500/[0.07] text-emerald-300" },
-              { label: "Overdue",     value: team.taskCounts.overdue, cls: "border-red-500/20 bg-red-500/[0.07] text-red-300" },
+              { label: "Open Tasks",  value: teamDetail.taskCounts.open,    cls: "border-blue-500/20 bg-blue-500/[0.07] text-blue-300" },
+              { label: "Completed",   value: teamDetail.taskCounts.done,    cls: "border-emerald-500/20 bg-emerald-500/[0.07] text-emerald-300" },
+              { label: "Overdue",     value: teamDetail.taskCounts.overdue, cls: "border-red-500/20 bg-red-500/[0.07] text-red-300" },
             ].map((s) => (
               <div key={s.label} className={`rounded-xl border px-3 py-3 text-center ${s.cls}`}>
                 <p className="text-xl font-bold">{s.value}</p>
@@ -227,7 +364,7 @@ export default function TeamDetail() {
           {/* ── Members list ── */}
           <div className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-5">
             <div className="mb-4 flex items-center justify-between">
-              <p className="text-[13px] font-semibold text-white">Members ({allMembers.length})</p>
+              <p className="text-[13px] font-semibold text-white">Members ({teamDetail.members.length})</p>
               {isAdmin && (
                 <button className="text-[12px] text-blue-400 hover:text-blue-300">Manage →</button>
               )}
@@ -242,8 +379,7 @@ export default function TeamDetail() {
             </div>
 
             <div className="divide-y divide-white/[0.04]">
-              <MemberRow member={team.lead} isAdmin={isAdmin} />
-              {team.members.map((m) => (
+              {teamDetail.members.map((m) => (
                 <MemberRow key={m.id} member={m} isAdmin={isAdmin} />
               ))}
             </div>
@@ -256,26 +392,26 @@ export default function TeamDetail() {
             <div className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-5">
               <p className="mb-4 text-[13px] font-semibold text-white">Assigned project</p>
 
-              {team.projectId ? (
+              {teamDetail.projectId ? (
                 <>
                   <div className="mb-3 flex items-start justify-between gap-2">
-                    <a href={`/projects/${team.projectId}`} className="text-[14px] font-bold text-blue-300 hover:text-blue-200">
-                      {team.project}
+                    <a href={`/projects/${teamDetail.projectId}`} className="text-[14px] font-bold text-blue-300 hover:text-blue-200">
+                      {teamDetail.project}
                     </a>
                     <span className={`shrink-0 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${pCfg.pill}`}>{pCfg.label}</span>
                   </div>
                   <div className="mb-3 flex flex-col gap-2 text-[12px] text-slate-500">
-                    <span>🎯 Deadline: <span className="text-amber-300 font-medium">{team.projectDeadline}</span></span>
+                    <span>🎯 Deadline: <span className="text-amber-300 font-medium">{teamDetail.projectDeadline}</span></span>
                   </div>
                   <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
                     <div
                       className={`h-full rounded-full bg-gradient-to-r ${pCfg.bar}`}
-                      style={{ width: `${team.projectProgress}%` }}
+                      style={{ width: `${teamDetail.projectProgress}%` }}
                     />
                   </div>
                   <div className="mt-1.5 flex justify-between text-[11px] text-slate-600">
-                    <span>{team.projectProgress}% complete</span>
-                    <a href={`/projects/${team.projectId}/tasks`} className="text-blue-400 hover:text-blue-300">View tasks →</a>
+                    <span>{teamDetail.projectProgress}% complete</span>
+                    <a href={`/projects/${teamDetail.projectId}/tasks`} className="text-blue-400 hover:text-blue-300">View tasks →</a>
                   </div>
                 </>
               ) : (
@@ -303,9 +439,9 @@ export default function TeamDetail() {
                 )}
               </div>
 
-              {team.recentTasks.length > 0 ? (
+              {teamDetail.recentTasks.length > 0 ? (
                 <div className="divide-y divide-white/[0.04]">
-                  {team.recentTasks.map((t) => {
+                  {teamDetail.recentTasks.map((t) => {
                     const ts = TASK_STATUS_CFG[t.status];
                     return (
                       <div key={t.id} className="flex items-center gap-2.5 py-2.5">

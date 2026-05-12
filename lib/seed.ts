@@ -8,7 +8,6 @@ if (!process.env.POSTGRES_URL) {
 }
 const sql = postgres(process.env.POSTGRES_URL, { ssl: "require" });
 
-
 //employees table seeded successfully
 async function seedEmployees() {
   await sql`DROP TABLE IF EXISTS employees`

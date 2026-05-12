@@ -1,10 +1,17 @@
 // TaskDetail.tsx — /projects/[project_id]/tasks/[task_id]
 // Team members can update status; Team Lead / Admin can edit everything
-'use client'
-import { useState } from "react";
+import postgres from "postgres";
+import { auth } from "@/auth";
+import { overwrite } from "zod";
 
-type TaskStatus = "todo" | "in_progress" | "done";
-type UserRole   = "team_lead" | "team_member" | "admin";
+if (!process.env.POSTGRES_URL) {
+  throw new Error("POSTGRES_URL is not defined");
+}
+
+const sql = postgres(process.env.POSTGRES_URL, { ssl: "require" });
+
+type TaskStatus = "pending" | "active" | "completed" | "overdue";
+type UserRole   = "team_lead" | "team_member" | "admin" | "on_bench";
 
 interface ActivityEntry {
   icon: string;
@@ -34,35 +41,12 @@ interface TaskDetail {
   activity: ActivityEntry[];
 }
 
-const MOCK_TASK: TaskDetail = {
-  id: "t2",
-  name: "Build REST API endpoints",
-  desc: "Implement all REST API endpoints for the auth, projects, and tasks modules. Endpoints should follow RESTful conventions with proper HTTP status codes, request validation, and JWT-based authentication middleware. Include Swagger documentation for all routes.",
-  status: "in_progress",
-  priority: "high",
-  createdAt: "Feb 12, 2025",
-  assignedDate: "Feb 14, 2025",
-  deadline: "Jun 18, 2025",
-  daysRemaining: 38,
-  isOverdue: false,
-  project: "Ethara Platform v2",
-  projectId: "1",
-  team: "Team Alpha",
-  assignee: "Vikram Das",
-  assigneeInitial: "V",
-  assigneeColor: "bg-emerald-500",
-  assigneeRole: "Backend Developer",
-  activity: [
-    { icon: "✅", text: "updated status to In Progress",   highlight: "Vikram Das",  time: "Today, 10:24 AM" },
-    { icon: "👤", text: "assigned task to Vikram Das",      highlight: "Rahul Verma", time: "Feb 14, 9:00 AM" },
-    { icon: "📋", text: "created this task",                highlight: "Rahul Verma", time: "Feb 12, 11:30 AM" },
-  ],
-};
 
 const STATUS_STEPS: { value: TaskStatus; label: string; icon: string }[] = [
-  { value: "todo",        label: "To Do",       icon: "○" },
-  { value: "in_progress", label: "In Progress", icon: "◑" },
-  { value: "done",        label: "Done",        icon: "●" },
+  { value: "pending",        label: "To Do",       icon: "○" },
+  { value: "active", label: "In Progress", icon: "◑" },
+  { value: "completed",        label: "Done",        icon: "●" },
+  { value: "overdue",        label: "Done",        icon: "⚠" },
 ];
 
 const PRIORITY_CONFIG = {
@@ -97,7 +81,7 @@ function StatusUpdater({
             <button
               key={s.value}
               disabled={!canUpdate}
-              onClick={() => canUpdate && onChange(s.value)}
+              // onClick={() => canUpdate && onChange(s.value)}
               className={`flex w-full items-center gap-3 rounded-xl border px-4 py-2.5 text-left text-[13px] font-medium transition-all ${
                 isActive
                   ? "border-blue-500/50 bg-blue-500/15 text-blue-300"
@@ -172,22 +156,137 @@ function MetaSidebar({ task }: { task: TaskDetail }) {
 
 // ─── Page export ──────────────────────────────────────────────────────────────
 
-export default function TaskDetail() {
-  const currentRole: UserRole = "team_member"; // replace with sessionStorage role
-  const task = MOCK_TASK;
+export default async function TaskDetail({
+  params
+} : {
+  params: Promise<{task_id: string}>
+}) {
+  const { task_id } = await params;
+
+  const session = await auth();
+  const user = session?.user;
+
+  if(!user) return null;
+  // current user role
+  const currentRole: UserRole = user.role;
+
+  // task
+  const [taskRow] = await sql`
+    SELECT *
+    FROM tasks
+    WHERE id = ${task_id}
+    LIMIT 1
+  `;
+
+  if (!taskRow) {
+    throw new Error("Task not found");
+  }
+
+  // project
+  const [projectRow] = await sql`
+    SELECT *
+    FROM projects
+    WHERE id = ${taskRow.project_id}
+    LIMIT 1
+  `;
+
+  // assignee
+  const [assigneeRow] = await sql`
+    SELECT *
+    FROM employees
+    WHERE id = ${taskRow.assigned_emp_id}
+    LIMIT 1
+  `;
+
+  const assigneeName =
+    assigneeRow?.name || "Unassigned";
+
+  const avatarColors = [
+    "bg-blue-500",
+    "bg-emerald-500",
+    "bg-rose-500",
+    "bg-violet-500",
+    "bg-cyan-500",
+    "bg-amber-500",
+    "bg-pink-500",
+  ];
+
+  const assigneeColor =
+    avatarColors[
+      assigneeName.length % avatarColors.length
+    ];
+
+  const deadlineDate = new Date(taskRow.deadline);
+
+  const now = new Date();
+
+  const diffTime = deadlineDate.getTime() - now.getTime();
+
+  const daysRemaining = Math.ceil(
+    diffTime / (1000 * 60 * 60 * 24)
+  );
+
+  const isOverdue =
+    taskRow.status !== "completed" &&
+    deadlineDate < now;
+
+  let status =
+    taskRow.status as TaskStatus;
+
+  if (isOverdue) {
+    status = "overdue";
+  }
+
+  // activity logs
+  const activity: ActivityEntry[] =
+    (taskRow.activity_logs || []).map(
+      (log: string) => ({
+        icon: "📝",
+        text: log,
+        highlight: assigneeName,
+        time: "Recently",
+      })
+    );
+
+  const task: TaskDetail = {
+    id: taskRow.id,
+    name: taskRow.name,
+    desc: taskRow.description,
+    status,
+    priority: (taskRow.priority as | "low" | "medium" | "high") || "medium",
+    createdAt: taskRow.date_of_creation?.toLocaleDateString() || "",
+    assignedDate: taskRow.date_of_assigning?.toLocaleDateString() || "",
+    deadline: taskRow.deadline?.toLocaleDateString() || "",
+    daysRemaining,
+    isOverdue,
+    project: projectRow?.name || "Unknown Project",
+    projectId: projectRow?.id || "",
+    team: projectRow?.team_name || "Unknown Team",
+    assignee: assigneeName,
+    assigneeInitial: assigneeName
+      .split(" ")
+      .map((w: string) => w[0])
+      .join("")
+      .toUpperCase(),
+
+    assigneeColor,
+    assigneeRole: assigneeRow?.role || "Employee",
+    activity,
+  };
 
   // In real app: check if sessionStorage id === task.assigneeId
   const isAssignee = true;
   const canEdit    = currentRole === "team_lead" || currentRole === "admin";
   const canUpdate  = isAssignee || canEdit;
 
-  const [status, setStatus] = useState<TaskStatus>(task.status);
+  
 
   const currentStatusCfg = {
-    todo:        { label: "To Do",       pill: "bg-slate-700/60 text-slate-400 border-slate-600/30" },
-    in_progress: { label: "In Progress", pill: "bg-blue-500/20 text-blue-300 border-blue-500/30" },
-    done:        { label: "Done",        pill: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30" },
-  }[status];
+    pending:        { label: "Pending",       pill: "bg-slate-700/60 text-slate-400 border-slate-600/30" },
+    active: { label: "Active", pill: "bg-blue-500/20 text-blue-300 border-blue-500/30" },
+    completed:        { label: "Completed",        pill: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30" },
+    overdue:        { label: "Overdue",        pill: "bg-red-500/20 text-red-300 border-red-500/30" },
+  }[task.status];
 
   return (
     <div className="min-h-screen bg-[#0b0f1a] text-white">
@@ -295,7 +394,8 @@ export default function TaskDetail() {
 
           {/* ── Right column ── */}
           <div className="flex flex-col gap-4">
-            <StatusUpdater current={status} onChange={setStatus} canUpdate={canUpdate} />
+            {/* will add this feature soon */}
+            {/* <StatusUpdater current={task.status} onChange={() => {}} canUpdate={canUpdate} /> */}
             <MetaSidebar task={task} />
           </div>
         </div>

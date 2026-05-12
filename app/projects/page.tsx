@@ -1,4 +1,12 @@
 // Projects.tsx — /projects (Admin only)
+import postgres from "postgres";
+import { auth } from "@/auth";
+
+if (!process.env.POSTGRES_URL) {
+  throw new Error("POSTGRES_URL is not defined");
+}
+
+const sql = postgres(process.env.POSTGRES_URL, { ssl: "require" });
 
 type ProjectStatus = "active" | "overdue" | "pending" | "completed";
 
@@ -16,106 +24,14 @@ interface Project {
   members: { initial: string; color: string }[];
 }
 
-const MOCK_PROJECTS: Project[] = [
-  {
-    id: "1",
-    name: "Ethara Platform v2",
-    desc: "Full platform overhaul with new REST API layer and auth redesign.",
-    team: "Team Alpha",
-    teamLead: "Rahul Verma",
-    createdAt: "Jan 10, 2025",
-    assignedAt: "Jan 15, 2025",
-    deadline: "Jun 30, 2025",
-    progress: 62,
-    status: "active",
-    members: [
-      { initial: "R", color: "bg-violet-500" },
-      { initial: "S", color: "bg-cyan-500" },
-      { initial: "V", color: "bg-emerald-500" },
-      { initial: "K", color: "bg-amber-500" },
-    ],
-  },
-  {
-    id: "2",
-    name: "Mobile App Redesign",
-    desc: "Complete iOS & Android UX overhaul with new design system.",
-    team: "Team Beta",
-    teamLead: "Meera Joshi",
-    createdAt: "Feb 3, 2025",
-    assignedAt: "Feb 8, 2025",
-    deadline: "Jul 15, 2025",
-    progress: 38,
-    status: "active",
-    members: [
-      { initial: "M", color: "bg-amber-500" },
-      { initial: "N", color: "bg-pink-500" },
-      { initial: "V", color: "bg-blue-500" },
-    ],
-  },
-  {
-    id: "3",
-    name: "Analytics Dashboard",
-    desc: "Real-time reporting & KPI tracking for business intelligence.",
-    team: "Team Gamma",
-    teamLead: "Priya Nair",
-    createdAt: "Nov 12, 2024",
-    assignedAt: "Nov 20, 2024",
-    deadline: "May 20, 2025",
-    progress: 85,
-    status: "overdue",
-    members: [
-      { initial: "P", color: "bg-cyan-500" },
-      { initial: "J", color: "bg-violet-500" },
-      { initial: "A", color: "bg-rose-500" },
-    ],
-  },
-  {
-    id: "4",
-    name: "API Gateway v3",
-    desc: "High-performance gateway with rate limiting and load balancing.",
-    team: "",
-    teamLead: "",
-    createdAt: "May 1, 2025",
-    assignedAt: "—",
-    deadline: "Aug 1, 2025",
-    progress: 0,
-    status: "pending",
-    members: [],
-  },
-  {
-    id: "5",
-    name: "Internal HR Portal",
-    desc: "Employee management, leave tracking and payroll integration.",
-    team: "Team Delta",
-    teamLead: "Karan Mehta",
-    createdAt: "Sep 5, 2024",
-    assignedAt: "Sep 10, 2024",
-    deadline: "Jan 31, 2025",
-    progress: 100,
-    status: "completed",
-    members: [
-      { initial: "K", color: "bg-teal-500" },
-      { initial: "R", color: "bg-blue-500" },
-    ],
-  },
-  {
-    id: "6",
-    name: "DevOps Automation Suite",
-    desc: "CI/CD pipelines, infra-as-code and monitoring dashboards.",
-    team: "Team Alpha",
-    teamLead: "Rahul Verma",
-    createdAt: "Mar 20, 2025",
-    assignedAt: "Mar 25, 2025",
-    deadline: "Sep 15, 2025",
-    progress: 20,
-    status: "active",
-    members: [
-      { initial: "V", color: "bg-emerald-500" },
-      { initial: "S", color: "bg-cyan-500" },
-      { initial: "A", color: "bg-violet-500" },
-      { initial: "K", color: "bg-amber-500" },
-    ],
-  },
+const avatarColors = [
+  "bg-blue-500",
+  "bg-emerald-500",
+  "bg-rose-500",
+  "bg-violet-500",
+  "bg-cyan-500",
+  "bg-amber-500",
+  "bg-pink-500",
 ];
 
 const STATUS_CONFIG: Record<ProjectStatus, { label: string; pill: string; bar: string }> = {
@@ -209,15 +125,82 @@ function ProjectCard({ project }: { project: Project }) {
 
 // ─── Page export ──────────────────────────────────────────────────────────────
 
-export default function Projects() {
+export default async function Projects() {
+  // In real app use useState for activeFilter + search
+  const session = await auth();
+  if(!session?.user){
+    return null;
+  }
+  const user = session?.user;
+
+  const projectRows = await sql`
+    SELECT *
+    FROM projects
+  `;
+
+  const projects: Project[] = [];
+
+  for (const prj of projectRows) {
+    // fetch team lead
+    const leadRow = await sql`
+      SELECT name
+      FROM employees
+      WHERE team_id = ${prj.team_id}
+      AND role = 'team_lead'
+      LIMIT 1
+    `;
+
+    // fetch team members
+    const memberRows = await sql`
+      SELECT name
+      FROM employees
+      WHERE team_id = ${prj.team_id}
+    `;
+
+    const members = memberRows.map((member, index) => ({
+      initial: member.name
+        .split(" ")
+        .map((w: string) => w[0])
+        .join("")
+        .toUpperCase(),
+
+      color: avatarColors[index % avatarColors.length],
+    }));
+
+    let status = prj.status as ProjectStatus;
+
+    // overdue logic
+    if (
+      status !== "completed" &&
+      new Date(prj.deadline) < new Date()
+    ) {
+      status = "overdue";
+    }
+
+    projects.push({
+      id: prj.id,
+      name: prj.name,
+      desc: prj.description,
+      team: prj.team_name,
+      teamLead: leadRow[0]?.name || "No Lead",
+      createdAt: prj.date_of_creation?.toLocaleDateString() || "",
+      assignedAt: prj.date_of_assigning?.toLocaleDateString() || "",
+      deadline: prj.deadline?.toLocaleDateString() || "",
+      progress: prj.progress,
+      status,
+      members,
+    });
+  }
+
   const counts = FILTERS.map((f) => ({
     ...f,
-    count: f.value === "all" ? MOCK_PROJECTS.length : MOCK_PROJECTS.filter((p) => p.status === f.value).length,
+    count: f.value === "all" ? projects.length : projects.filter((p) => p.status === f.value).length,
   }));
 
-  // In real app use useState for activeFilter + search
   const activeFilter: ProjectStatus | "all" = "all";
-  const filtered = activeFilter === "all" ? MOCK_PROJECTS : MOCK_PROJECTS.filter((p) => p.status === activeFilter);
+  const filtered = activeFilter === "all" ? projects : projects.filter((p) => p.status === activeFilter);
+
+  
 
   return (
     <div className="min-h-screen bg-[#0b0f1a] text-white">
@@ -233,17 +216,17 @@ export default function Projects() {
           </button>
         </div>
 
-        {/* Search */}
-        <div className="mb-5 flex items-center gap-2.5 rounded-xl border border-white/[0.07] bg-white/[0.03] px-4 py-2.5">
+        {/* Search will be impolemented soon*/}
+        {/* <div className="mb-5 flex items-center gap-2.5 rounded-xl border border-white/[0.07] bg-white/[0.03] px-4 py-2.5">
           <span className="text-slate-500">🔍</span>
           <input
             className="flex-1 bg-transparent text-[13px] text-white placeholder-slate-600 outline-none"
             placeholder="Search projects by name, team or status…"
           />
-        </div>
+        </div> */}
 
-        {/* Filters */}
-        <div className="mb-6 flex flex-wrap gap-2">
+        {/* Filters will be implemented soon */}
+        {/* <div className="mb-6 flex flex-wrap gap-2">
           {counts.map((f) => (
             <button
               key={f.value}
@@ -256,11 +239,11 @@ export default function Projects() {
               {f.label} ({f.count})
             </button>
           ))}
-        </div>
+        </div> */}
 
         {/* Grid */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {filtered.map((p) => (
+          {projects.map((p) => (
             <ProjectCard key={p.id} project={p} />
           ))}
         </div>

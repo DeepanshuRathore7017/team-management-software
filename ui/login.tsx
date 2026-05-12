@@ -1,6 +1,6 @@
 'use client'
 import { useActionState, useState } from "react";
-// import { authenticate } from "../lib/actions";
+import { authenticate } from "../lib/actions";
 import { useSearchParams } from "next/navigation";
 
 
@@ -19,13 +19,10 @@ export default function Login() {
 
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get('callbackUrl') || `/dashboard`
-  // const [errorMessage, formAction, isPending] = useActionState(
-  //   authenticate,
-  //   undefined,
-  // );
-
-  let errorMessage; //to be deleted later
-  const isPending = false;
+  const [errorMessage, formAction, isPending] = useActionState(
+    authenticate,
+    undefined,
+  );
 
   return (
     <div className="min-h-screen relative flex items-center justify-center font-sans overflow-hidden">
@@ -80,7 +77,7 @@ export default function Login() {
 
           {/* Form */}
           <form
-          //  action={formAction}
+           action={formAction}
            className="space-y-5">
 
             <input type="hidden" name="redirectTo" value={callbackUrl} />

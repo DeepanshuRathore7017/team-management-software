@@ -2,16 +2,17 @@
 // Role-based dashboard — swap `role` inside mockUser to preview different views
 
 import Link from "next/link";
+import { auth } from "@/auth";
+import postgres from "postgres";
+import { tasks } from "@/lib/placeholder-data";
 
 type Role = "admin" | "team_lead" | "team_member" | "on_bench";
 
-const mockUser = {
-  name: "Aryan Sharma",
-  email: "aryan@ethara.ai",
-  role: "admin" as Role,
-  avatar: "A",
-};
+if (!process.env.POSTGRES_URL) {
+  throw new Error("POSTGRES_URL is not defined");
+}
 
+const sql = postgres(process.env.POSTGRES_URL, { ssl: "require" });
 
 
 // ─── Shared components ────────────────────────────────────────────────────────
@@ -39,13 +40,14 @@ function QuickLink({ label, sub, icon, href }: { label: string; sub: string; ico
   );
 }
 
-type TaskStatus = "todo" | "in_progress" | "done";
+type TaskStatus = "pending" | "active" | "completed" | "overdue";
 
 function TaskRow({ title, project, deadline, status }: { title: string; project: string; deadline: string; status: TaskStatus }) {
   const s: Record<TaskStatus, { label: string; cls: string }> = {
-    todo:        { label: "To Do",       cls: "bg-slate-700/60 text-slate-300" },
-    in_progress: { label: "In Progress", cls: "bg-blue-500/20 text-blue-300" },
-    done:        { label: "Done",        cls: "bg-emerald-500/20 text-emerald-300" },
+    pending:        { label: "Pending",       cls: "bg-slate-700/60 text-slate-400" },
+    active: { label: "Active", cls: "bg-yellow-500/20 text-ye-300llow" },
+    completed:        { label: "Completed",        cls: "bg-emerald-500/20 text-emerald-300" },
+    overdue:        { label: "Overdue",        cls: "bg-red-500/20 text-red-300" },
   };
   return (
     <div className="flex items-center gap-3 rounded-lg px-1 py-2.5 transition-colors hover:bg-white/[0.02]">
@@ -61,14 +63,26 @@ function TaskRow({ title, project, deadline, status }: { title: string; project:
 
 // ─── Role-specific widget sets ────────────────────────────────────────────────
 
-function AdminWidgets() {
+async function AdminWidgets() {
+  const total_projects = await sql`SELECT COUNT(id) FROM projects`;
+  const totalProjects = total_projects[0].count;
+  const recentProjects = await sql`SELECT * FROM projects ORDER BY date_of_creation DESC LIMIT 5;`
+
+  const total_teams = await sql`SELECT COUNT(id) FROM teams`;
+  const totalTeams = total_teams[0].count;
+
+  const total_employees = await sql`SELECT COUNT(id) FROM employees`;
+  const totalEmployees = total_employees[0].count;
+
+  const on_bench_employees = await sql`SELECT COUNT(id) FROM employees WHERE role = 'on_bench'`;
+  const onBenchEmployees = on_bench_employees[0].count;
   return (
     <>
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <StatCard label="Total Projects" value={12} icon="📁" accent="bg-violet-500/20 text-violet-300" />
-        <StatCard label="Active Teams"   value={5}  icon="👥" accent="bg-blue-500/20 text-blue-300" />
-        <StatCard label="Employees"      value={34} icon="🧑‍💼" accent="bg-cyan-500/20 text-cyan-300" />
-        <StatCard label="On Bench"       value={6}  icon="⏸️" accent="bg-amber-500/20 text-amber-300" />
+        <StatCard label="Total Projects" value={totalProjects} icon="📁" accent="bg-violet-500/20 text-violet-300" />
+        <StatCard label="Active Teams"   value={totalTeams}  icon="👥" accent="bg-blue-500/20 text-blue-300" />
+        <StatCard label="Employees"      value={totalEmployees} icon="🧑‍💼" accent="bg-cyan-500/20 text-cyan-300" />
+        <StatCard label="On Bench"       value={onBenchEmployees}  icon="⏸️" accent="bg-amber-500/20 text-amber-300" />
       </div>
 
       <div>
@@ -85,19 +99,22 @@ function AdminWidgets() {
           <a href="/projects" className="text-[12px] text-blue-400 hover:text-blue-300">View all →</a>
         </div>
         <div className="divide-y divide-white/[0.04]">
-          {[
-            { name: "Ethara Platform v2",  team: "Team Alpha · 8 members", due: "Jun 30", cls: "bg-emerald-500/20 text-emerald-300", label: "Active"  },
-            { name: "Mobile App Redesign", team: "Team Beta · 5 members",  due: "Jul 15", cls: "bg-blue-500/20 text-blue-300",       label: "Active"  },
-            { name: "Analytics Dashboard", team: "Team Gamma · 6 members", due: "May 20", cls: "bg-red-500/20 text-red-300",         label: "Overdue" },
-            { name: "API Gateway v3",      team: "Unassigned",             due: "Aug 1",  cls: "bg-slate-700/60 text-slate-400",     label: "Pending" },
-          ].map((p) => (
+          {recentProjects.map((p) => (
             <div key={p.name} className="flex items-center gap-3 py-3">
               <div className="min-w-0 flex-1">
                 <p className="text-[13px] font-medium text-white">{p.name}</p>
-                <p className="text-[11px] text-slate-500">{p.team}</p>
+                <p className="text-[11px] text-slate-500">{p.team_name}</p>
               </div>
-              <span className="text-[11px] text-slate-500">Due {p.due}</span>
-              <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${p.cls}`}>{p.label}</span>
+              <span className="text-[11px] text-slate-500">Due {new Date(p.deadline).toLocaleDateString() }</span>
+              <span 
+                className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold 
+                  ${p.status == 'active' ? 'bg-yellow-500/20 text-ye-300llow' : 
+                  p.status == 'pending' ? 'bg-slate-700/60 text-slate-400' : 
+                  p.status == 'overdue' ? 'bg-red-500/20 text-red-300' : 
+                  'bg-emerald-500/20 text-emerald-300'}`
+                  }>
+                    {p.status.charAt(0).toUpperCase() + p.status.slice(1)}
+              </span>
             </div>
           ))}
         </div>
@@ -106,61 +123,160 @@ function AdminWidgets() {
   );
 }
 
-function TeamLeadWidgets() {
+async function TeamLeadWidgets() {
+  const session = await auth();
+  if(!session?.user){
+    return null;
+  }
+  const user = session?.user;
+
+  const team_rows = await sql`SELECT team_id FROM employees WHERE id = ${user?.id}`;
+  const teamId = team_rows[0].team_id;
+  const total_members_in_team_rows = await sql`SELECT COUNT(id) FROM employees WHERE team_id = ${teamId}`
+  const totalMembersInTeam = total_members_in_team_rows[0].count;
+
+  const open_tasks_rows = await sql`SELECT open_tasks FROM teams WHERE id = ${teamId}`;
+  const openTasks = open_tasks_rows[0].open_tasks;
+
+  const project_rows = await sql`SELECT id, name, status, deadline, progress FROM projects WHERE team_id = ${teamId}`;
+  const projectId = project_rows[0].id;
+  const projectName = project_rows[0].name;
+  let projectStatus = project_rows[0].status;
+  const projectDeadline = project_rows[0].deadline;
+  const projectProgress = project_rows[0].progress;
+
+  const tasks = await sql`SELECT * FROM tasks WHERE project_id = ${projectId}`;
+  console.log("tasks = ", tasks)
+
+  if(projectDeadline < new Date()) {
+    projectStatus = 'overdue'
+  }
+
+  const overdue_tasks_rows = await sql`SELECT COUNT(id) FROM tasks WHERE project_id = ${projectId} AND deadline < NOW()`;
+  const overdueTasks = overdue_tasks_rows[0].count;
+
   return (
     <>
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-        <StatCard label="Team Size"  value={8}  icon="👥" accent="bg-cyan-500/20 text-cyan-300" />
-        <StatCard label="Open Tasks" value={15} icon="📋" accent="bg-blue-500/20 text-blue-300" />
-        <StatCard label="Overdue"    value={3}  icon="⚠️" accent="bg-rose-500/20 text-rose-300" />
+        <StatCard label="Team Size"  value={totalMembersInTeam}  icon="👥" accent="bg-cyan-500/20 text-cyan-300" />
+        <StatCard label="Open Tasks" value={openTasks} icon="📋" accent="bg-blue-500/20 text-blue-300" />
+        <StatCard label="Overdue"    value={overdueTasks}  icon="⚠️" accent="bg-rose-500/20 text-rose-300" />
       </div>
 
       <div className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-5">
         <div className="mb-1 flex items-center justify-between">
           <p className="text-[13px] font-semibold text-white">Assigned project</p>
-          <span className="rounded-full bg-emerald-500/20 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-300">Active</span>
+          <span 
+            className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold 
+              ${projectStatus == 'active' ? 'bg-yellow-500/20 text-ye-300llow' : 
+                projectStatus == 'pending' ? 'bg-slate-700/60 text-slate-400' : 
+                projectStatus == 'overdue' ? 'bg-red-500/20 text-red-300' : 
+                projectStatus == 'completed' ? 'bg-emerald-500/20 text-emerald-300' : 
+                ''}`
+              }>
+                {projectStatus.charAt(0).toUpperCase() + projectStatus.slice(1)}
+          </span>
         </div>
-        <p className="mt-2 text-lg font-bold text-blue-300">Ethara Platform v2</p>
-        <p className="mt-1 text-[12px] text-slate-500">Deadline: Jun 30, 2025</p>
+        <p className="mt-2 text-lg font-bold text-blue-300">{projectName}</p>
+        <p className="mt-1 text-[12px] text-slate-500">Deadline : {projectDeadline.toLocaleDateString()}</p>
         <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
-          <div className="h-full w-[62%] rounded-full bg-gradient-to-r from-blue-500 to-blue-400" />
+          <div className={`h-full rounded-full bg-gradient-to-r from-blue-500 to-blue-400`} style={{ width: `${projectProgress}%` }} />
         </div>
-        <p className="mt-1.5 text-right text-[11px] text-slate-500">62% complete</p>
+        <p className="mt-1.5 text-right text-[11px] text-slate-500">{projectProgress}%</p>  
       </div>
 
       <div className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-5">
         <p className="mb-3 text-[13px] font-semibold text-white">Recent tasks</p>
         <div className="divide-y divide-white/[0.04]">
-          <TaskRow title="Design auth flow" project="Ethara Platform v2" deadline="Jun 10" status="done" />
-          <TaskRow title="Build REST API"   project="Ethara Platform v2" deadline="Jun 18" status="in_progress" />
-          <TaskRow title="Write unit tests" project="Ethara Platform v2" deadline="Jun 25" status="todo" />
+          {
+            tasks.map((tsk) => {
+              let taskStatus = tsk.status;
+              if (
+                taskStatus !== "completed" &&
+                new Date(tsk.deadline) < new Date()
+              ) {
+                taskStatus = "overdue";
+              }
+
+             return (
+              <TaskRow key={tsk.id} title={tsk.name} project={projectName} deadline={tsk.deadline.toLocaleDateString()} status={taskStatus} />
+             ) 
+            })
+          }
+        </div>
+      </div>
+
+
+      <div className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-5">
+        <p className="mb-3 text-[13px] font-semibold text-white">My team</p>
+        <div className="divide-y divide-white/[0.04]">
+         {/* dynamic team id to be addedd later */}
+          <QuickLink label="My Team"  sub=""  icon="👥"  href={`/teams/${teamId}`} /> 
         </div>
       </div>
     </>
   );
 }
 
-function TeamMemberWidgets() {
+async function TeamMemberWidgets() {
+  const session = await auth();
+  if(!session?.user){
+    return null;
+  }
+  const user = session?.user;
+
+  const tasks = await sql`SELECT * FROM tasks WHERE assigned_emp_id = ${user.id}`
+
+  const total_tasks = await sql`SELECT COUNT(id) FROM tasks WHERE assigned_emp_id = ${user.id}`
+  const totalTasks = total_tasks[0].count;
+
+  const active_tasks = await sql`SELECT COUNT(id) FROM tasks WHERE status = 'active'`;
+  const activeTasks = active_tasks[0].count;
+
+  const overdue_tasks = await sql`SELECT COUNT(id) FROM tasks WHERE deadline < NOW()`;
+  const overdueTasks = overdue_tasks[0].count;
+
+  const project = await sql`SELECT * FROM tasks WHERE assigned_emp_id = ${user.id}`
+  const projectId = project[0].project_id;
+  const projectName = project[0].project_name;
+
+  const team_id = await sql`SELECT team_id FROM employees WHERE id = ${user.id}`
+  const teamId = team_id[0].team_id;
+
   return (
     <>
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-        <StatCard label="My Tasks"    value={6} icon="📋" accent="bg-blue-500/20 text-blue-300" />
-        <StatCard label="In Progress" value={2} icon="🔄" accent="bg-cyan-500/20 text-cyan-300" />
-        <StatCard label="Overdue"     value={1} icon="⚠️" accent="bg-rose-500/20 text-rose-300" />
+        <StatCard label="My Tasks"    value={totalTasks} icon="📋" accent="bg-blue-500/20 text-blue-300" />
+        <StatCard label="In Progress" value={activeTasks} icon="🔄" accent="bg-cyan-500/20 text-cyan-300" />
+        <StatCard label="Overdue"     value={overdueTasks} icon="⚠️" accent="bg-rose-500/20 text-rose-300" />
       </div>
+
       <div className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-5">
         <p className="mb-3 text-[13px] font-semibold text-white">My tasks</p>
         <div className="divide-y divide-white/[0.04]">
-          <TaskRow title="Build REST API"   project="Ethara Platform v2" deadline="Jun 18" status="in_progress" />
-          <TaskRow title="Fix login bug"    project="Ethara Platform v2" deadline="Jun 12" status="in_progress" />
-          <TaskRow title="Write unit tests" project="Ethara Platform v2" deadline="Jun 25" status="todo" />
+          {
+            tasks.map((tsk) => {
+              let taskStatus = tsk.status;
+              if (
+                taskStatus !== "completed" &&
+                new Date(tsk.deadline) < new Date()
+              ) {
+                taskStatus = "overdue";
+              }
+              
+             return (
+              <TaskRow key={tsk.id} title={tsk.name} project={projectName} deadline={tsk.deadline.toLocaleDateString()} status={taskStatus} />
+             ) 
+            })
+          }
         </div>
       </div>
+
       <div className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-5">
         <p className="mb-3 text-[13px] font-semibold text-white">My team</p>
         <div className="divide-y divide-white/[0.04]">
          {/* dynamic team id to be addedd later */}
-          <QuickLink label="My Team"    sub=""  icon="👥" href="/teams/1" />   
+          <QuickLink label="My Team"    sub=""  icon="👥" href={`/teams/${teamId}`} />   
         </div>
       </div>
     </>
@@ -180,8 +296,14 @@ function OnBenchWidgets() {
 
 // ─── Page export ──────────────────────────────────────────────────────────────
 
-export default function Dashboard() {
-  const user = mockUser; // In real app: JSON.parse(sessionStorage.getItem("user"))
+export default async function Dashboard() {
+  const session = await auth();
+
+  if(!session?.user) {
+    return null;
+  }
+  const user = session?.user;
+
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
