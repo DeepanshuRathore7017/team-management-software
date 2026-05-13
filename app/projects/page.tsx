@@ -35,10 +35,10 @@ const avatarColors = [
 ];
 
 const STATUS_CONFIG: Record<ProjectStatus, { label: string; pill: string; bar: string }> = {
-  active:    { label: "Active",    pill: "bg-emerald-500/20 text-emerald-300", bar: "from-blue-500 to-blue-400" },
+  completed:    { label: "Completed",    pill: "bg-emerald-500/20 text-emerald-300", bar: "from-blue-500 to-blue-400" },
   overdue:   { label: "Overdue",   pill: "bg-red-500/20 text-red-300",         bar: "from-red-500 to-red-400" },
   pending:   { label: "Pending",   pill: "bg-slate-700/60 text-slate-400",     bar: "from-slate-600 to-slate-500" },
-  completed: { label: "Completed", pill: "bg-violet-500/20 text-violet-300",   bar: "from-emerald-500 to-emerald-400" },
+  active: { label: "Active", pill: "bg-violet-500/20 text-violet-300",   bar: "from-emerald-500 to-emerald-400" },
 };
 
 const FILTERS: { label: string; value: ProjectStatus | "all" }[] = [
@@ -113,11 +113,11 @@ function ProjectCard({ project }: { project: Project }) {
         </div>
 
         {/* Actions */}
-        <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+        {/* <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
           <button className="rounded-lg bg-white/[0.05] px-2.5 py-1 text-[11px] text-slate-400 hover:bg-white/[0.1] hover:text-white">Assign</button>
           <button className="rounded-lg bg-white/[0.05] px-2.5 py-1 text-[11px] text-slate-400 hover:bg-white/[0.1] hover:text-white">Edit</button>
           <button className="rounded-lg bg-red-500/10 px-2.5 py-1 text-[11px] text-red-400 hover:bg-red-500/20">Delete</button>
-        </div>
+        </div> */}
       </div>
     </div>
   );
@@ -157,6 +157,19 @@ export default async function Projects() {
       WHERE team_id = ${prj.team_id}
     `;
 
+    //fetch tasks
+    const tasks = await sql`SELECT id, status from tasks WHERE project_id = ${prj.id}`;
+    let open_tasks = 0;
+    let completed_tasks = 0;
+    for(const task of tasks) {
+      let taskStatus = task.status;
+
+      if(taskStatus == 'completed') open_tasks++;
+      else completed_tasks++;
+    }
+
+    const progress: number = open_tasks == 0 ? 100 : Number((open_tasks / (open_tasks + completed_tasks) * 100).toFixed(2));
+
     const members = memberRows.map((member, index) => ({
       initial: member.name
         .split(" ")
@@ -170,12 +183,16 @@ export default async function Projects() {
     let status = prj.status as ProjectStatus;
 
     // overdue logic
-    if (
-      status !== "completed" &&
-      new Date(prj.deadline) < new Date()
-    ) {
+    if (prj.deadline && status !== "completed" && new Date(prj.deadline) < new Date()) {
       status = "overdue";
     }
+
+    if(status == 'completed' && progress < 100) {
+      status = 'active';
+    }
+    // if(status == 'pending' && progress > 0) {
+    //   status = 'active';
+    // }
 
     projects.push({
       id: prj.id,
@@ -186,7 +203,7 @@ export default async function Projects() {
       createdAt: prj.date_of_creation?.toLocaleDateString() || "",
       assignedAt: prj.date_of_assigning?.toLocaleDateString() || "",
       deadline: prj.deadline?.toLocaleDateString() || "",
-      progress: prj.progress,
+      progress: progress,
       status,
       members,
     });
@@ -211,9 +228,9 @@ export default async function Projects() {
             <h1 className="text-[24px] font-bold text-white">Projects</h1>
             <p className="mt-1 text-[13px] text-slate-500">Manage and track all projects across teams</p>
           </div>
-          <button className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-2.5 text-[13px] font-semibold text-white shadow-lg shadow-blue-900/30 hover:from-blue-500 hover:to-blue-600 transition-all">
+          <a href="/projects/new" className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-2.5 text-[13px] font-semibold text-white shadow-lg shadow-blue-900/30 hover:from-blue-500 hover:to-blue-600 transition-all">
             ＋ New Project
-          </button>
+          </a>
         </div>
 
         {/* Search will be impolemented soon*/}

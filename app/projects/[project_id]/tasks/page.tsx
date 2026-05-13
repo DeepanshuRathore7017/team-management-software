@@ -208,7 +208,7 @@ export default async function Tasks({
 
   const tasks: Task[] = [];
   for(const [index, task] of tasks_rows.entries()) {
-    const isOverdue = task.status != 'completed' && task.deadline < new Date();
+    const isOverdue = task.deadline && task.status != 'completed' && task.deadline < new Date();
     const status = isOverdue ? 'overdue' : task.status;
     const [{name: assigneeName}] = await sql`SELECT name FROM employees WHERE id = ${task.assigned_emp_id}`
     tasks.push({
@@ -223,7 +223,7 @@ export default async function Tasks({
         .toUpperCase(),
       assigneeColor: avatarColors[index % avatarColors.length],
       assignedDate: task.date_of_creation?.toLocaleDateString(),
-      deadline: task.deadline?.toLocaleDateString(),
+      deadline: task.deadline?.toLocaleDateString() || null,
       status: status,
       isOverdue: isOverdue,
 
@@ -270,9 +270,9 @@ export default async function Tasks({
             </p>
           </div>
           {canEdit && (
-            <button className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-2.5 text-[13px] font-semibold text-white shadow-lg shadow-blue-900/30 hover:from-blue-500 hover:to-blue-600 transition-all">
+            <a href={`/projects/${project_id}/tasks/new`} className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-2.5 text-[13px] font-semibold text-white shadow-lg shadow-blue-900/30 hover:from-blue-500 hover:to-blue-600 transition-all">
               ＋ New Task
-            </button>
+            </a>
           )}
         </div>
 

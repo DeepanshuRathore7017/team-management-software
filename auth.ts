@@ -21,13 +21,13 @@ type User = {
 
 async function getUser(email: string): Promise<User | null>{
     try{
-        console.log("aya hai try mai yha");
+        // console.log("aya hai try mai yha");
         const allUsers = await sql`SELECT * FROM employees`;
-        console.log(allUsers);
+        // console.log(allUsers);
         const user = await sql<User[]>`SELECT * FROM employees WHERE email = ${email}`;
         return user[0] || null;
     } catch(err) {
-        console.log("aya hai catch mai yha");
+        // console.log("aya hai catch mai yha");
         console.log("Eror occured at auth.ts in getUser function: ", err);
         throw new Error("Failed to fetch user.");
     }

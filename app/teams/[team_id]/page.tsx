@@ -1,5 +1,10 @@
 // Accessible by Admin and Team Members of that team
 import postgres from "postgres";
+import { deleteTeam, addMemberInTeam, removeTeamMember } from "../actions";
+import DeleteButton from "@/components/DeleteButton";
+import AddMemberInTeamButton from "@/components/AddMemberInTeamButton";
+import RemoveTeamMemberButton from "@/components/RemoveTeamMemberButton";
+import DeleteTeamButton from "@/components/DeleteButton";
 
 if (!process.env.POSTGRES_URL) {
   throw new Error("POSTGRES_URL is not defined");
@@ -77,7 +82,7 @@ const TASK_STATUS_CFG: Record<TaskStatus, { label: string; pill: string; dot: st
 
 // ─── Member Row ───────────────────────────────────────────────────────────────
 
-function MemberRow({ member, isAdmin }: { member: Member; isAdmin: boolean }) {
+function MemberRow({ member, isAdmin, teamId }: { member: Member; isAdmin: boolean, teamId: string }) {
   const completionPct = member.tasksAssigned > 0
     ? Math.round((member.tasksDone / member.tasksAssigned) * 100)
     : 0;
@@ -119,9 +124,11 @@ function MemberRow({ member, isAdmin }: { member: Member; isAdmin: boolean }) {
 
       {/* Admin actions */}
       {isAdmin && (
-        <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-          <button className="rounded-lg bg-white/[0.05] px-2.5 py-1 text-[11px] text-slate-400 hover:bg-white/[0.1] hover:text-white">Edit</button>
-          <button className="rounded-lg bg-red-500/10 px-2.5 py-1 text-[11px] text-red-400 hover:bg-red-500/20">Remove</button>
+        <div className="flex gap-1">
+          {/* <button className="rounded-lg bg-white/[0.05] px-2.5 py-1 text-[11px] text-slate-400 hover:bg-white/[0.1] hover:text-white">Edit</button> */}
+          <form action={removeTeamMember.bind(null, member.id, teamId)}>
+            <RemoveTeamMemberButton/>
+          </form>
         </div>
       )}
     </div>
@@ -265,13 +272,10 @@ export default async function TeamDetail({
 
   let projectStatus =(project?.status as ProjectStatus) || "pending";
 
-  if (
-    projectStatus !== "completed" &&
-    project &&
-    new Date(project.deadline) < new Date()
-  ) {
+  if (project.deadline && projectStatus !== "completed" && project && new Date(project.deadline) < new Date()) {
     projectStatus = "overdue";
   }
+
 
   const teamDetail: TeamDetail = {
     id: team.id,
@@ -293,7 +297,12 @@ export default async function TeamDetail({
 
   const isAdmin = true; // replace with sessionStorage role check
   const pCfg    = PROJECT_STATUS_CFG[teamDetail.projectStatus];
-  const allMembers = [teamDetail.lead, ...teamDetail.members];
+  const employees = await sql`
+    SELECT id, name, role
+    FROM employees
+    WHERE role = 'on_bench'
+    ORDER BY name
+  `;
 
   return (
     <div className="min-h-screen bg-[#0b0f1a] text-white">
@@ -319,12 +328,45 @@ export default async function TeamDetail({
             </div>
             {isAdmin && (
               <div className="flex shrink-0 gap-2">
-                <button className="rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-1.5 text-[12px] font-medium text-slate-400 hover:bg-white/[0.08] hover:text-white transition-all">
+                {/* <button className="cursor-pointer rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-1.5 text-[12px] font-medium text-slate-400 hover:bg-white/[0.08] hover:text-white transition-all">
                   ✏️ Edit Team
-                </button>
-                <button className="rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-1.5 text-[12px] font-medium text-blue-300 hover:bg-blue-500/20 transition-all">
-                  ＋ Add Member
-                </button>
+                </button> */}
+                <form action={deleteTeam.bind(null, team.id)}>
+                  <DeleteButton to_delete="Team"/>
+                </form>
+
+                <form
+                  action={addMemberInTeam.bind(null, team_id)}
+                  className="flex items-start gap-2"
+                >
+                  <details className="relative">
+                    <summary className="flex cursor-pointer list-none items-center gap-2 rounded-lg border border-white/[0.08] bg-[#111827] px-4 py-2 text-sm text-slate-300 hover:bg-white/[0.05]">
+                      Select Members
+                    </summary>
+
+                    <div className="absolute z-20 mt-2 max-h-60 w-64 overflow-y-auto rounded-xl border border-white/[0.08] bg-[#111827] p-2 shadow-2xl">
+                      {employees.map((e) => (
+                        <label
+                          key={e.id}
+                          className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 hover:bg-white/[0.05]"
+                        >
+                          <input
+                            type="checkbox"
+                            name="member_ids"
+                            value={e.id}
+                            className="h-4 w-4 accent-blue-500"
+                          />
+
+                          <span className="text-sm text-slate-300">
+                            {e.name}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </details>
+
+                  <AddMemberInTeamButton/>
+                </form>
               </div>
             )}
           </div>
@@ -365,22 +407,22 @@ export default async function TeamDetail({
           <div className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-5">
             <div className="mb-4 flex items-center justify-between">
               <p className="text-[13px] font-semibold text-white">Members ({teamDetail.members.length})</p>
-              {isAdmin && (
+              {/* {isAdmin && (
                 <button className="text-[12px] text-blue-400 hover:text-blue-300">Manage →</button>
-              )}
+              )} */}
             </div>
 
             {/* Column labels */}
-            <div className="mb-2 flex items-center gap-4 px-1 text-[11px] font-semibold uppercase tracking-widest text-slate-600">
+            <div className="mb-2 flex items-center px-1 text-[11px] font-semibold uppercase tracking-widest text-slate-600">
               <span className="flex-1">Employee</span>
-              <span className="hidden w-28 sm:block">Task progress</span>
-              <span className="hidden w-24 text-right lg:block">Joined</span>
+              <span className="flex-1">Task progress</span>
+              {/* <span className="hidden w-24 text-right lg:block">Joined</span> */}
               {isAdmin && <span className="w-20" />}
             </div>
 
             <div className="divide-y divide-white/[0.04]">
               {teamDetail.members.map((m) => (
-                <MemberRow key={m.id} member={m} isAdmin={isAdmin} />
+                <MemberRow key={m.id} member={m} isAdmin={isAdmin} teamId={team_id} />
               ))}
             </div>
           </div>

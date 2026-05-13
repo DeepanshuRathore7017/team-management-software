@@ -2,6 +2,8 @@
 // Accessible by Admin and Team Members
 
 import postgres from "postgres";
+import { deleteProject } from "../actions";
+import DeleteButton from "@/components/DeleteButton";
 
 if (!process.env.POSTGRES_URL) {
   throw new Error("POSTGRES_URL is not defined");
@@ -167,8 +169,13 @@ export default async function ProjectDetail({
     WHERE project_id = ${prj.id}
   `;
 
+  let open_tasks = 0;
+  let completed_tasks = 0;
   const tasks = taskRows.map((t: any) => {
     let taskStatus = t.status as TaskStatus;
+
+    if(taskStatus == 'completed') open_tasks++;
+    else completed_tasks++;
 
     if (
       taskStatus !== "completed" &&
@@ -184,6 +191,8 @@ export default async function ProjectDetail({
       status: taskStatus,
     };
   });
+
+  const progress: number = open_tasks == 0 ? 100 : Number((open_tasks / (open_tasks + completed_tasks) * 100).toFixed(2));
 
   // task counts
   const [{ complted }] = await sql`
@@ -209,21 +218,23 @@ export default async function ProjectDetail({
 
   let status = prj.status as ProjectStatus;
 
-  if (status !== "completed" && new Date(prj.deadline) < new Date()) {
+  if (prj.deadline && status !== "completed" && new Date(prj.deadline) < new Date()) {
     status = "overdue";
   }
+
+  
 
   const p: ProjectDetail = {
     id: prj.id,
     name: prj.name,
     desc: prj.description,
     status,
-    team: prj.team_name,
+    team: prj.team_name || "Not Assigned",
     teamLead,
     createdAt: prj.date_of_creation?.toLocaleDateString() || "",
-    assignedAt: prj.date_of_assigning?.toLocaleDateString() || "",
-    deadline: prj.deadline?.toLocaleDateString() || "",
-    progress: Number(prj.progress),
+    assignedAt: prj.date_of_assigning?.toLocaleDateString() || "Not Assigned",
+    deadline: prj.deadline?.toLocaleDateString() || "No Deadline",
+    progress: progress,
 
     members,
     tasks,
@@ -260,22 +271,22 @@ export default async function ProjectDetail({
               <p className="max-w-2xl text-[13px] leading-relaxed text-slate-400">{p.desc}</p>
             </div>
             <div className="flex shrink-0 gap-2">
-              <button className="rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-1.5 text-[12px] font-medium text-slate-400 hover:bg-white/[0.08] hover:text-white transition-all">
+              <a href={`/projects/${project_id}/edit`} className="rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-1.5 text-[12px] font-medium text-slate-400 hover:bg-white/[0.08] hover:text-white transition-all">
                 ✏️ Edit
-              </button>
-              <button className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-1.5 text-[12px] font-medium text-red-400 hover:bg-red-500/20 transition-all">
-                🗑 Delete
-              </button>
+              </a>
+              <form action={deleteProject.bind(null, project_id)}>
+                <DeleteButton to_delete="Project"/>
+              </form>
             </div>
           </div>
 
           {/* Meta grid */}
           <div className="grid grid-cols-2 gap-4 border-t border-white/[0.05] pt-5 sm:grid-cols-3 lg:grid-cols-6">
             <MetaItem label="Created"   value={p.createdAt} />
-            <MetaItem label="Assigned"  value={p.assignedAt} />
-            <MetaItem label="Deadline"  value={p.deadline} valueClass="text-amber-300" />
-            <MetaItem label="Team"      value={p.team} valueClass="text-blue-300" />
-            <MetaItem label="Team Lead" value={p.teamLead} />
+            <MetaItem label="Assigned"  value={p?.assignedAt} />
+            <MetaItem label="Deadline"  value={p?.deadline} valueClass="text-amber-300" />
+            <MetaItem label="Team"      value={p?.team} valueClass="text-blue-300" />
+            <MetaItem label="Team Lead" value={p?.teamLead} />
             <div>
               <p className="mb-1 text-[11px] font-semibold uppercase tracking-widest text-slate-600">Progress</p>
               <p className="text-[13px] font-bold text-white">{p.progress}%</p>

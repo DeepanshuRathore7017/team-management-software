@@ -26,7 +26,6 @@ interface Team {
   project: string;
   projectId: string;
   projectStatus: ProjectStatus;
-  createdAt: string;
   tasksOpen: number;
   tasksDone: number;
 }
@@ -170,11 +169,7 @@ function TeamCard({ team }: { team: Team }) {
           <a href={`/teams/${team.id}`} className="block text-[16px] font-bold text-white hover:text-blue-300 transition-colors">
             {team.name}
           </a>
-          <p className="mt-0.5 text-[12px] text-slate-500">Created {team.createdAt}</p>
-        </div>
-        <div className="flex shrink-0 gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-          <button className="rounded-lg bg-white/[0.05] px-2.5 py-1 text-[11px] text-slate-400 hover:bg-white/[0.1] hover:text-white">Edit</button>
-          <button className="rounded-lg bg-red-500/10 px-2.5 py-1 text-[11px] text-red-400 hover:bg-red-500/20">Delete</button>
+          {/* <p className="mt-0.5 text-[12px] text-slate-500">Created {team.createdAt}</p> */}
         </div>
       </div>
 
@@ -331,9 +326,6 @@ export default async function Teams() {
       projectStatus:
         (projectRow[0]?.status as ProjectStatus) || "pending",
 
-      createdAt:
-        projectRow[0]?.date_of_creation?.toLocaleDateString() || "",
-
       tasksOpen: Number(team.open_tasks),
 
       tasksDone: Number(team.completed_tasks),
@@ -354,9 +346,9 @@ export default async function Teams() {
               {teams.length} teams · {totalEmployees} employees · {assignedTeams} assigned to projects
             </p>
           </div>
-          <button className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-2.5 text-[13px] font-semibold text-white shadow-lg shadow-blue-900/30 hover:from-blue-500 hover:to-blue-600 transition-all">
+          <a href='/teams/new' className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 px-4 py-2.5 text-[13px] font-semibold text-white shadow-lg shadow-blue-900/30 hover:from-blue-500 hover:to-blue-600 transition-all">
             ＋ New Team
-          </button>
+          </a>
         </div>
 
         {/* Summary stats */}

@@ -16,7 +16,7 @@ export const authConfig = {
       }) {
       const isLoggedIn = !!auth?.user;
       const isAdmin = auth?.user?.role === "admin";
-      console.log("session user = ", auth)
+      // console.log("session user = ", auth)
 
       const isOnLogin = nextUrl.pathname.startsWith("/login");
       const isOnDashboard = nextUrl.pathname.startsWith("/dashboard");

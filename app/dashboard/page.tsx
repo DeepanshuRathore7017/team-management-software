@@ -146,7 +146,7 @@ async function TeamLeadWidgets() {
   const projectProgress = project_rows[0].progress;
 
   const tasks = await sql`SELECT * FROM tasks WHERE project_id = ${projectId}`;
-  console.log("tasks = ", tasks)
+  // console.log("tasks = ", tasks)
 
   if(projectDeadline < new Date()) {
     projectStatus = 'overdue'
