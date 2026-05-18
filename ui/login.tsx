@@ -62,14 +62,14 @@ export default function Login() {
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-4">
               <span className="text-2xl">
-                <img src="/ethara-logo.png" alt="" />
+                <img src="/logo.jpeg" alt="" />
               </span>
             </div>
             <h1 className="text-2xl font-bold text-white tracking-tight mb-1">
-              Ethara Manager
+              TeamSync
             </h1>
             <p className="text-blue-300/80 text-sm">
-              Ethara manager is a management application for managing projects, tasks and teams.
+              TeamSync is a management application for managing projects, tasks and teams.
             </p>
             <div className="mt-3 h-px bg-gradient-to-r from-transparent via-blue-400/30 to-transparent" />
           </div>
