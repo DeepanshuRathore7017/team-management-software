@@ -280,3 +280,90 @@ export async function createTask(
 
   redirect(`/projects/${project_id}/tasks/${task.id}`);
 }
+
+export async function updateTask(
+  task_id: string,
+  formData: FormData
+) {
+  const name = formData.get("task_name") as string;
+  const description = formData.get("description") as string;
+  const status = formData.get("status") as string;
+  const priority = formData.get("priority") as string;
+  const deadlineValue = formData.get("deadline") as string;
+  const employee_id = formData.get("employee_id") as string;
+
+  const deadline = deadlineValue
+  ? new Date(deadlineValue)
+  : null;
+
+  const employee_rows = await sql`SELECT name, email from employees WHERE id = ${employee_id}`;
+  const employeeEmail = employee_rows[0].email;
+  const employeeName = employee_rows[0].name;
+
+  const task_rows = await sql`SELECT * FROM tasks WHERE id = ${task_id}`;
+  const task = task_rows[0];
+
+  const currentDate = new Date();
+
+  const activity_logs = task.activity_logs;
+  if(name != task.name) {
+    activity_logs.push(`Task name changed from ${task.name} to ${name} on ${currentDate.toDateString()}`);
+  }
+  if(description != task.description) {
+    activity_logs.push(`Task description changed from ${task.description} to ${description} on ${currentDate.toDateString()}`);
+  }
+  if(status != task.status) {
+    activity_logs.push(`Task status changed from ${task.status} to ${status} on ${currentDate.toDateString()}`);
+  }
+  if(priority != task.priority) {
+    activity_logs.push(`Task priority changed from ${task.priority} to ${priority} on ${currentDate.toDateString()}`);
+  }
+  if(priority != task.priority) {
+    activity_logs.push(`Task priority changed from ${task.priority} to ${priority} on ${currentDate.toDateString()}`);
+  }
+
+  if(deadline && task.deadline == null) {
+    activity_logs.push(`Deadline made of ${task.deadline.toDateString()} on ${currentDate.toDateString()}`);
+  } else if(deadline != task.deadline) {
+    activity_logs.push(`Task deadline changed from ${task.deadline.toDateString()} to ${deadline?.toDateString()} on ${currentDate.toDateString()}`);
+  }
+
+  if(employee_id != task.assigned_emp_id) {
+    activity_logs.push(`Assigned task to ${employeeName} on ${currentDate.toDateString()}`);
+  }
+
+  let date_of_assigning;
+  if(employee_id){
+    date_of_assigning = new Date();
+  }
+
+  
+  await sql`
+    UPDATE tasks
+    SET
+      name = ${name},
+      description = ${description},
+      status = ${status},
+      priority = ${priority},
+      deadline = ${deadline || null},
+      assigned_emp_id = ${employee_id || null},
+      assigned_emp_email = ${employeeEmail || null},
+      date_of_assigning = ${date_of_assigning || null},
+      activity_logs = ${activity_logs}
+    WHERE id = ${task_id}
+  `;
+  
+  redirect(`/projects/${task.project_id}/tasks/${task_id}`);
+}
+
+export async function deleteTask(task_id: string) {
+  const task_rows = await sql`SELECT project_id from tasks WHERE id = ${task_id}`;
+  const projectId = task_rows[0].project_id;
+
+  await sql`
+    DELETE FROM tasks
+    WHERE id = ${task_id}
+  `;
+
+  redirect(`/projects/${projectId}/tasks`);
+}

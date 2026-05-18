@@ -4,6 +4,9 @@ import postgres from "postgres";
 import { auth } from "@/auth";
 import { overwrite } from "zod";
 
+import DeleteButton from "@/components/DeleteButton";
+import { deleteTask } from "@/app/projects/actions";
+
 if (!process.env.POSTGRES_URL) {
   throw new Error("POSTGRES_URL is not defined");
 }
@@ -320,12 +323,15 @@ export default async function TaskDetail({
                 </div>
                 {canEdit && (
                   <div className="flex shrink-0 gap-2">
-                    <button className="rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-1.5 text-[12px] font-medium text-slate-400 hover:bg-white/[0.08] hover:text-white transition-all">
+                    <a href={`/projects/${task.projectId}/tasks/${task_id}/edit`} className="rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-1.5 text-[12px] font-medium text-slate-400 hover:bg-white/[0.08] hover:text-white transition-all">
                       ✏️ Edit
-                    </button>
-                    <button className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-1.5 text-[12px] font-medium text-red-400 hover:bg-red-500/20 transition-all">
+                    </a>
+                    {/* <button className="rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-1.5 text-[12px] font-medium text-red-400 hover:bg-red-500/20 transition-all">
                       🗑 Delete
-                    </button>
+                    </button> */}
+                    <form action={deleteTask.bind(null, task_id)}>
+                      <DeleteButton to_delete="Task"/>
+                    </form>
                   </div>
                 )}
               </div>

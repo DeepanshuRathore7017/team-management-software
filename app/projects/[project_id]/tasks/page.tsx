@@ -183,7 +183,7 @@ function TaskRow({ task, canEdit, project_id }: { task: Task; canEdit: boolean, 
       {canEdit && (
         <td className="px-5 py-3.5">
           <div className="flex gap-1">
-            <button className="rounded-lg bg-white/[0.05] px-2 py-1 text-[11px] text-slate-400 hover:bg-white/[0.1] hover:text-white">✏️</button>
+            <a href={`/projects/${project_id}/tasks/${task.id}/edit`} className="rounded-lg bg-white/[0.05] px-2 py-1 text-[11px] text-slate-400 hover:bg-white/[0.1] hover:text-white">✏️</a>
             <button className="rounded-lg bg-red-500/10 px-2 py-1 text-[11px] text-red-400 hover:bg-red-500/20">🗑</button>
           </div>
         </td>
