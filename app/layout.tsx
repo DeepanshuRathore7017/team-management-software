@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Ethara Manager",
-  description: "Ethara manager is a management application for managing projects, tasks and teams",
+  title: "TeamSync",
+  description: "TeamSync is a management application for managing projects, tasks and teams",
 };
 
 export default function RootLayout({
