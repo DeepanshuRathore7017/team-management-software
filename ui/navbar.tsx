@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import LogoutButton from "./logout-button";
+import LogoutButton from "../components/logout-button";
 import { mock } from "node:test";
 import { auth } from "@/auth";
 
