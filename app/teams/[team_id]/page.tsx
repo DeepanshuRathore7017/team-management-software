@@ -5,6 +5,9 @@ import DeleteButton from "@/components/DeleteButton";
 import AddMemberInTeamButton from "@/components/AddMemberInTeamButton";
 import RemoveTeamMemberButton from "@/components/RemoveTeamMemberButton";
 import DeleteTeamButton from "@/components/DeleteButton";
+import isUUID from "validator/lib/isUUID";
+import { redirect } from "next/navigation";
+import { auth } from "@/auth";
 
 if (!process.env.POSTGRES_URL) {
   throw new Error("POSTGRES_URL is not defined");
@@ -143,6 +146,16 @@ export default async function TeamDetail({
   params: Promise<{ team_id: string }>;
 }) {
   const { team_id } = await params;
+  const session = await auth();
+  const user = session?.user;
+
+  if (!user?.id) {
+    redirect("/login");
+  }
+
+  if(!isUUID(team_id)) {
+    redirect('/dashboard?error=invalid-team-id');
+  }
   // team
   const [team] = await sql`
     SELECT *
@@ -151,8 +164,18 @@ export default async function TeamDetail({
     LIMIT 1
   `;
 
+  // const dataToLog = await sql `SELECT * FROM teams`;
+  // console.log("Data to log = ",dataToLog)
+
   if (!team) {
-    throw new Error("Team not found");
+    redirect("/dashboard?error=team-not-found");
+  }
+
+  const userTeam = await sql`SELECT team_id FROM employees WHERE id = ${user?.id}`;
+  const userTeamId = userTeam[0].team_id;
+
+  if(userTeamId != team_id) {
+    redirect("/dashboard?error=you-are-not-authorized-to-access-this-team");
   }
 
   // members

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { auth } from "@/auth";
 import postgres from "postgres";
 import { tasks } from "@/lib/placeholder-data";
+import ErrorAlert from "@/components/ErrorAlert";
 
 type Role = "admin" | "team_lead" | "team_member" | "on_bench";
 
@@ -178,7 +179,7 @@ async function TeamLeadWidgets() {
           </span>
         </div>
         <p className="mt-2 text-lg font-bold text-blue-300">{projectName}</p>
-        <p className="mt-1 text-[12px] text-slate-500">Deadline : {projectDeadline.toLocaleDateString()}</p>
+        <p className="mt-1 text-[12px] text-slate-500">Deadline : {projectDeadline?.toLocaleDateString()}</p>
         <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
           <div className={`h-full rounded-full bg-gradient-to-r from-blue-500 to-blue-400`} style={{ width: `${projectProgress}%` }} />
         </div>
@@ -296,19 +297,30 @@ function OnBenchWidgets() {
 
 // ─── Page export ──────────────────────────────────────────────────────────────
 
-export default async function Dashboard() {
+export default async function Dashboard({
+  searchParams
+}:{
+  searchParams: Promise<{ error? : string}>
+}) {
+  const {error} = await searchParams;
   const session = await auth();
 
   if(!session?.user) {
     return null;
   }
   const user = session?.user;
+  console.log("User role = ", user.role)
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
   return (
     <div className="min-h-screen bg-[#0b0f1a] text-white">
+      {
+        error && <ErrorAlert error={error} /> 
+      }
+      
+
       <main className="mx-auto max-w-5xl px-7 py-10">
         <div className="mb-8">
           <p className="text-[12px] uppercase tracking-widest text-slate-600">{greeting},</p>

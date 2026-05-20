@@ -4,6 +4,10 @@
 import postgres from "postgres";
 import { deleteProject } from "../actions";
 import DeleteButton from "@/components/DeleteButton";
+import isUUID from "validator/lib/isUUID";
+import { redirect } from "next/navigation";
+import { auth } from "@/auth";
+
 
 if (!process.env.POSTGRES_URL) {
   throw new Error("POSTGRES_URL is not defined");
@@ -120,6 +124,16 @@ export default async function ProjectDetail({
   params: Promise<{ project_id: string }>;
 }) {
   const {project_id} = await params;
+  const session = await auth();
+  const user = session?.user;
+
+  if(!user){
+    redirect('/login');
+  }
+
+  if(!isUUID(project_id)) {
+    redirect('/dashboard?error=invalid-project-id');
+  }
 
   // project
   const [prj] = await sql`
@@ -130,7 +144,17 @@ export default async function ProjectDetail({
   `;
 
   if (!prj) {
-    throw new Error("Project not found");
+    redirect('/dashboard?error=project-not-found');
+  }
+
+  const team_id_row = await sql`select team_id from employees where id = ${user.id}`;
+  const team_id = team_id_row[0].team_id;
+
+  const project_id_row = await sql`SELECT id FROM projects WHERE team_id = ${team_id}`
+  const projectId = project_id_row[0].id;
+
+  if(projectId != project_id){
+    redirect('/dashboard?error=you-are-not-authorized-to-access-this-project');
   }
 
   // team lead
