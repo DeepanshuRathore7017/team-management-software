@@ -46,6 +46,7 @@ interface ProjectDetail {
   members: Member[];
   tasks: TaskSummary[];
   taskCounts: { completed: number; active: number; pending: number };
+  activityLogs: string[];
 }
 
 const avatarColors = [
@@ -147,15 +148,17 @@ export default async function ProjectDetail({
     redirect('/dashboard?error=project-not-found');
   }
 
-  const team_id_row = await sql`select team_id from employees where id = ${user.id}`;
-  const team_id = team_id_row[0].team_id;
+  if(user.role != 'admin') {
+    const team_id_row = await sql`select team_id from employees where id = ${user.id}`;
+    const team_id = team_id_row[0].team_id;
 
-  const project_id_row = await sql`SELECT id FROM projects WHERE team_id = ${team_id}`
-  const projectId = project_id_row[0].id;
+    const project_id_row = await sql`SELECT id FROM projects WHERE team_id = ${team_id}`
+    const projectId = project_id_row[0].id;
 
-  if(projectId != project_id){
-    redirect('/dashboard?error=you-are-not-authorized-to-access-this-project');
-  }
+    if(projectId != project_id){
+      redirect('/dashboard?error=you-are-not-authorized-to-access-this-project');
+    }
+  }  
 
   // team lead
   const [leadRow] = await sql`
@@ -268,6 +271,7 @@ export default async function ProjectDetail({
       active: Number(active),
       pending: Number(pending),
     },
+    activityLogs: prj.activity_logs || [],
   };
 
 
@@ -389,6 +393,42 @@ export default async function ProjectDetail({
               ))}
             </div>
           </div>
+        </div>
+
+        {/* Activity Logs */}
+        <div className="mt-5 rounded-2xl border border-white/[0.07] bg-white/[0.03] p-5">
+          <div className="mb-4 flex items-center justify-between">
+            <p className="text-[13px] font-semibold text-white">
+              Activity Logs
+            </p>
+
+            <span className="text-[12px] text-slate-500">
+              {p.activityLogs.length} activities
+            </span>
+          </div>
+
+          {p.activityLogs.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-white/[0.08] py-10 text-center text-[13px] text-slate-500">
+              No activity found
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {[...p.activityLogs]
+                .reverse()
+                .map((log, index) => (
+                  <div
+                    key={index}
+                    className="flex gap-3 rounded-xl border border-white/[0.05] bg-white/[0.02] px-4 py-3"
+                  >
+                    <div className="mt-1 h-2 w-2 shrink-0 rounded-full bg-blue-400" />
+
+                    <p className="text-[13px] leading-relaxed text-slate-300">
+                      {log}
+                    </p>
+                  </div>
+                ))}
+            </div>
+          )}
         </div>
       </main>
     </div>

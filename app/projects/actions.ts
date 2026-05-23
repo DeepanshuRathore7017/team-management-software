@@ -2,6 +2,7 @@
 
 import postgres from "postgres";
 import { redirect } from "next/navigation";
+import { auth } from "@/auth";
 
 if (!process.env.POSTGRES_URL) {
   throw new Error("POSTGRES_URL is not defined");
@@ -130,6 +131,13 @@ export async function updateProject(
   projectId: string,
   formData: FormData
 ) {
+  const session = await auth();
+  const user = session?.user;
+
+  if (!user) {
+    throw new Error("Unauthorized");
+  }
+
   const project_rows = await sql`SELECT * FROM projects WHERE id = ${projectId}`;
   const project = project_rows[0];
 
@@ -143,9 +151,9 @@ export async function updateProject(
     throw new Error("No change found between new and old entries.");
   }
 
-  if(teamId == null) {
-    throw new Error("Assign a team.");
-  }
+  // if(teamId == null) {
+  //   throw new Error("Assign a team.");
+  // }
 
   let teamName = null;
 
@@ -159,6 +167,51 @@ export async function updateProject(
     teamName = team?.name || null;
   }
 
+  // activity logs
+  const logs: string[] = [];
+
+  const now = new Date().toLocaleString();
+
+  if (project.name !== projectName) {
+    logs.push(
+      `[${now}] ${user.name} changed project name from "${project.name}" to "${projectName}"`
+    );
+  }
+
+  if (project.description !== description) {
+    logs.push(
+      `[${now}] ${user.name} updated project description`
+    );
+  }
+
+  if (project.status !== status) {
+    logs.push(
+      `[${now}] ${user.name} changed project status from "${project.status}" to "${status}"`
+    );
+  }
+
+  if (
+    String(project.deadline || "") !== String(deadline || "")
+  ) {
+    logs.push(
+      `[${now}] ${user.name} updated project deadline`
+    );
+  }
+
+  if (
+    String(project.team_id || "") !== String(teamId || "")
+  ) {
+    logs.push(
+      `[${now}] ${user.name} assigned project to "${teamName || "No Team"}"`
+    );
+  }
+
+  // merge old + new logs
+  const updatedLogs = [
+    ...(project.activity_logs || []),
+    ...logs,
+  ];
+
   await sql`
     UPDATE projects
     SET
@@ -168,6 +221,7 @@ export async function updateProject(
       deadline = ${deadline},
       team_id = ${teamId},
       team_name = ${teamName},
+      activity_logs = ${updatedLogs}
     WHERE id = ${projectId}
   `;
 
@@ -290,15 +344,15 @@ export async function updateTask(
   const status = formData.get("status") as string;
   const priority = formData.get("priority") as string;
   const deadlineValue = formData.get("deadline") as string;
-  const employee_id = formData.get("employee_id") as string;
+  const employee_id = formData.get("employee_id") as string || null;
 
   const deadline = deadlineValue
   ? new Date(deadlineValue)
   : null;
 
   const employee_rows = await sql`SELECT name, email from employees WHERE id = ${employee_id}`;
-  const employeeEmail = employee_rows[0].email;
-  const employeeName = employee_rows[0].name;
+  const employeeEmail = employee_rows[0]?.email;
+  const employeeName = employee_rows[0]?.name;
 
   const task_rows = await sql`SELECT * FROM tasks WHERE id = ${task_id}`;
   const task = task_rows[0];
@@ -322,9 +376,7 @@ export async function updateTask(
     activity_logs.push(`Task priority changed from ${task.priority} to ${priority} on ${currentDate.toDateString()}`);
   }
 
-  if(deadline && task.deadline == null) {
-    activity_logs.push(`Deadline made of ${task.deadline.toDateString()} on ${currentDate.toDateString()}`);
-  } else if(deadline != task.deadline) {
+  if(deadline != task.deadline) {
     activity_logs.push(`Task deadline changed from ${task.deadline.toDateString()} to ${deadline?.toDateString()} on ${currentDate.toDateString()}`);
   }
 

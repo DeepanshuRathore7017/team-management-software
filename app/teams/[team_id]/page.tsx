@@ -171,11 +171,13 @@ export default async function TeamDetail({
     redirect("/dashboard?error=team-not-found");
   }
 
-  const userTeam = await sql`SELECT team_id FROM employees WHERE id = ${user?.id}`;
-  const userTeamId = userTeam[0].team_id;
+  if(user.role != 'admin') {
+    const userTeam = await sql`SELECT team_id FROM employees WHERE id = ${user?.id}`;
+    const userTeamId = userTeam[0].team_id;
 
-  if(userTeamId != team_id) {
-    redirect("/dashboard?error=you-are-not-authorized-to-access-this-team");
+    if(userTeamId != team_id) {
+      redirect("/dashboard?error=you-are-not-authorized-to-access-this-team");
+    }
   }
 
   // members
@@ -295,7 +297,7 @@ export default async function TeamDetail({
 
   let projectStatus =(project?.status as ProjectStatus) || "pending";
 
-  if (project.deadline && projectStatus !== "completed" && project && new Date(project.deadline) < new Date()) {
+  if (project?.deadline && projectStatus !== "completed" && project && new Date(project.deadline) < new Date()) {
     projectStatus = "overdue";
   }
 
@@ -396,15 +398,15 @@ export default async function TeamDetail({
 
           {/* Team lead highlight */}
           <div className="mb-5 flex items-center gap-3.5 rounded-xl border border-blue-500/20 bg-blue-500/[0.06] px-4 py-3">
-            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[15px] font-bold text-white ${teamDetail.lead.color}`}>
-              {teamDetail.lead.initial}
+            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[15px] font-bold text-white ${teamDetail?.lead?.color}`}>
+              {teamDetail?.lead?.initial}
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
-                <p className="text-[14px] font-semibold text-white">{teamDetail.lead.name}</p>
+                <p className="text-[14px] font-semibold text-white">{teamDetail?.lead?.name}</p>
                 <span className="rounded-full bg-blue-500/25 px-2.5 py-0.5 text-[10px] font-semibold text-blue-300">TEAM LEAD</span>
               </div>
-              <p className="text-[12px] text-slate-500">{teamDetail.lead.designation} · {teamDetail.lead.email}</p>
+              <p className="text-[12px] text-slate-500">{teamDetail?.lead?.designation} · {teamDetail?.lead?.email}</p>
             </div>
           </div>
 
